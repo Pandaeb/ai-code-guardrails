@@ -1,0 +1,78 @@
+# Release: publishing a GitHub release with tag vX.Y.Z builds the
+# package once and uploads it to PyPI via TRUSTED PUBLISHING (OIDC).
+#
+# There is no API token and no secret anywhere in this repository —
+# PyPI is configured (on the PyPI side) to trust exactly this
+# repository + workflow file + environment, and exchanges the job's
+# short-lived OIDC token for an upload credential that dies with the
+# job. Nothing long-lived exists to steal.
+#
+# Workflow security rules (CONTRIBUTING.md, non-negotiable):
+#   - permissions: contents: read at workflow level; the publish job
+#     alone requests id-token: write, with a comment saying why
+#   - event fields reach scripts only via env vars, quoted at use
+#   - GitHub-hosted runners only
+#
+# Action pins web-verified 2026-08.
+
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Verify the tag matches the package version
+        # One tag = one release of exactly that version; a v0.2.0 tag
+        # on a tree whose __init__ still says 0.1.0 must not publish.
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(python -c "import sys; sys.path.insert(0, 'src'); import ai_code_guardrails; print(ai_code_guardrails.__version__)")
+          if [ "v$version" != "$TAG" ]; then
+            echo "release tag $TAG does not match package version $version" >&2
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # The `pypi` environment is half of the trusted-publishing handshake
+    # (the PyPI publisher config names it); it is also where a human
+    # approval gate can be attached in the repository settings.
+    environment: pypi
+    permissions:
+      # The one scope this job needs: mint the OIDC token that PyPI
+      # exchanges for a short-lived upload credential. Deliberately not
+      # granted at workflow level.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
