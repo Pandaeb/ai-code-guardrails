@@ -393,8 +393,47 @@ def waiver_lines(token, trusted, claimed):
     return []
 
 
-def report(name, status, lines=None):
+def waiver_state(token, trusted, claimed):
+    """Structured waiver records for machine formats; [] when moot.
+
+    States: "waived-by-label" — a human applied the waiver label;
+    "self-waiver-attempted" — the token appeared on an agent-writable
+    surface and was IGNORED (the verdict is unchanged; machine consumers
+    should surface it as a finding, like the human report does).
+    """
+    if token in trusted:
+        return [{"token": token, "state": "waived-by-label", "source": trusted[token]}]
+    if token in claimed:
+        return [{"token": token, "state": "self-waiver-attempted", "source": claimed[token]}]
+    return []
+
+
+# When set (see cli.py), report() also appends structured entries here.
+# The printed human report stays the contract for log readers and the
+# corpus harness; machine formats are built from this collector.
+_COLLECTOR = None
+
+
+def start_collecting():
+    global _COLLECTOR
+    _COLLECTOR = []
+
+
+def stop_collecting():
+    global _COLLECTOR
+    collected, _COLLECTOR = _COLLECTOR, None
+    return collected or []
+
+
+def report(name, status, lines=None, waivers=None):
     """status: PASS | WARN | FAIL | SKIP. Returns the exit code."""
+    if _COLLECTOR is not None:
+        _COLLECTOR.append({
+            "guard": name,
+            "status": status,
+            "detail": list(lines or []),
+            "waivers": list(waivers or []),
+        })
     print("[%s] %s" % (status, name))
     for line in lines or []:
         print("    " + line)

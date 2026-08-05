@@ -3,7 +3,7 @@
 Usage:
     ai-code-guardrails check --base origin/main [--head HEAD]
         [--feature <name>] [--config <path>] [--registry-check]
-        [--skip guard1,guard2]
+        [--skip guard1,guard2] [--format human|json]
 
 The feature name (for the scope and deps guards) is taken from --feature,
 else the GUARDRAILS_FEATURE / GITHUB_HEAD_REF / CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
@@ -24,11 +24,18 @@ covers only the guards.
 """
 
 import argparse
+import contextlib
+import io
+import json
 import os
 
 from . import __version__
-from ._core import load_config, run_git
+from ._core import load_config, report, run_git, start_collecting, stop_collecting
 from .guards import GUARD_ORDER, RUNNERS
+
+# The machine-readable schema is a public contract, versioned separately
+# from the package: bump only on breaking changes to the JSON shape.
+SCHEMA_VERSION = 1
 
 
 def detect_feature():
@@ -52,25 +59,60 @@ def run_check(args):
     config = load_config(args.config, base=args.base)
     results = {}
 
-    for guard in GUARD_ORDER:
-        if guard in skip:
-            results[guard] = "SKIP"
-            continue
-        if guard == "scope" and not feature:
-            print("[SKIP] scope — no feature name detectable")
-            results[guard] = "SKIP"
-            continue
-        code = RUNNERS[guard](args, config)
-        results[guard] = "FAIL" if code else "OK"
+    # Machine formats reuse the guards untouched: report() collects the
+    # structured entries while its printed output goes to a discarded
+    # buffer, so stdout stays pure JSON. The default human format is
+    # byte-for-byte what it always was — CI log readers and the corpus
+    # harness parse it.
+    machine = args.format != "human"
+    if machine:
+        start_collecting()
+    sink = contextlib.redirect_stdout(io.StringIO()) if machine else contextlib.nullcontext()
+
+    with sink:
+        for guard in GUARD_ORDER:
+            if guard in skip:
+                results[guard] = "SKIP"
+                if machine:
+                    # Guard names in machine output match the printed report
+                    # (diff-size, test-integrity), not the registry keys.
+                    report(guard.replace("_", "-"), "SKIP", ["skipped via --skip"])
+                continue
+            if guard == "scope" and not feature:
+                if machine:
+                    report(guard, "SKIP", ["no feature name detectable"])
+                else:
+                    print("[SKIP] scope — no feature name detectable")
+                results[guard] = "SKIP"
+                continue
+            code = RUNNERS[guard](args, config)
+            results[guard] = "FAIL" if code else "OK"
+
+    exit_code = 1 if any(v == "FAIL" for v in results.values()) else 0
+
+    if machine:
+        entries = stop_collecting()
+        doc = {
+            "schema_version": SCHEMA_VERSION,
+            "package": {"name": "ai-code-guardrails", "version": __version__},
+            "check": {"base": args.base, "head": args.head, "feature": feature},
+            "guards": entries,
+            "summary": {
+                status.lower(): sum(1 for e in entries if e["status"] == status)
+                for status in ("PASS", "WARN", "FAIL", "SKIP")
+            },
+            "exit_code": exit_code,
+        }
+        print(json.dumps(doc, indent=2))
+        return exit_code
 
     print("\n=== guardrails summary ===")
     for guard, outcome in results.items():
         print("%-16s %s" % (guard, outcome))
-    if any(v == "FAIL" for v in results.values()):
+    if exit_code:
         print("\nOne or more guards failed. Waivers (guard-ack) are human-only —")
         print("a PR label added by a maintainer, never anything the author writes.")
-        return 1
-    return 0
+    return exit_code
 
 
 def main(argv=None):
@@ -98,6 +140,8 @@ def main(argv=None):
     check.add_argument("--registry-check", action="store_true",
                        help="verify added dependencies exist on their registry (needs network)")
     check.add_argument("--skip", default="", help="comma-separated guard names to skip")
+    check.add_argument("--format", default="human", choices=["human", "json"],
+                       help="output format (default: the human-readable report)")
 
     args = parser.parse_args(argv)
     return run_check(args)
