@@ -23,6 +23,7 @@ from .._core import (
     repo_root,
     show_file,
     waiver_lines,
+    waiver_state,
 )
 
 FILES_HEADING_RE = re.compile(r"^#{2,4}\s*(files to (create|modify)|scope exceptions)", re.I)
@@ -97,6 +98,7 @@ def run(args, config):
         )
 
     trusted, claims = collect_acks(args.base, args.head)
+    waivers = waiver_state("scope", trusted, claims)
     lines = (
         ["files not declared in tasks.md 'Files to create/modify' (as of %s):" % args.base]
         + ["  " + v for v in violations]
@@ -104,7 +106,7 @@ def run(args, config):
         + waiver_lines("scope", trusted, claims)
     )
     if "scope" in trusted:
-        return report("scope", "WARN", lines)
+        return report("scope", "WARN", lines, waivers=waivers)
     return report(
         "scope",
         "FAIL",
@@ -114,4 +116,5 @@ def run(args, config):
             "drive-by edits into their own task/PR, or ask a maintainer to add",
             "the `scope` label.",
         ],
+        waivers=waivers,
     )

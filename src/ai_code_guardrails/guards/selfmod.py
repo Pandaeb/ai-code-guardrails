@@ -23,6 +23,7 @@ from .._core import (
     report,
     show_file,
     waiver_lines,
+    waiver_state,
 )
 
 FLOOR_MARKERS = ["[floor]", "human-only"]
@@ -52,14 +53,15 @@ def run(args, config):
 
     trusted, claims = collect_acks(args.base, args.head)
     lines += waiver_lines("guardrail-change", trusted, claims)
+    waivers = waiver_state("guardrail-change", trusted, claims)
 
     if "guardrail-change" in trusted:
         return report("selfmod", "WARN", lines + [
             "reviewer: confirm the change does not remove a floor",
             "(hard cap present, test-integrity enabled, waivers human-only).",
-        ])
+        ], waivers=waivers)
     return report("selfmod", "FAIL", lines + [
         "move the guardrail change into its own PR, or ask a maintainer to",
         "add the `guardrail-change` label. Floor documents may be tightened,",
         "never weakened.",
-    ])
+    ], waivers=waivers)

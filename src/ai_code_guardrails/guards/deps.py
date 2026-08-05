@@ -23,6 +23,7 @@ from .._core import (
     repo_root,
     show_file,
     waiver_lines,
+    waiver_state,
 )
 
 
@@ -284,8 +285,9 @@ def run(args, config):
 
     trusted, claims = collect_acks(args.base, args.head)
     waiver = waiver_lines("new-dependency", trusted, claims)
+    waivers = waiver_state("new-dependency", trusted, claims)
     if "new-dependency" in trusted:
-        return report("deps", "WARN", undeclared + waiver)
+        return report("deps", "WARN", undeclared + waiver, waivers=waivers)
     return report(
         "deps",
         "FAIL",
@@ -298,4 +300,5 @@ def run(args, config):
             "name, verify the exact name on the registry, or ask a",
             "maintainer to add the `new-dependency` label.",
         ],
+        waivers=waivers,
     )

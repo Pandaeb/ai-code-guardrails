@@ -22,6 +22,7 @@ from .._core import (
     numstat,
     report,
     waiver_lines,
+    waiver_state,
 )
 
 
@@ -47,6 +48,7 @@ def run(args, config):
     exempt_total = sum(n for n, _ in claimed_exempt)
     soft, hard = cfg["soft_limit"], cfg["hard_limit"]
     trusted, claims = collect_acks(args.base, args.head)
+    waivers = waiver_state("oversize", trusted, claims)
 
     detail = [
         "changed lines: %d (soft limit %d, hard cap %d)" % (total, soft, hard),
@@ -64,8 +66,8 @@ def run(args, config):
         ] + ["%5d  %s" % (n, p) for n, p in sorted(claimed_exempt, reverse=True)[:10]]
         waiver = waiver_lines("oversize", trusted, claims)
         if "oversize" in trusted:
-            return report("diff-size", "WARN", lines + waiver)
-        return report("diff-size", "FAIL", lines + waiver)
+            return report("diff-size", "WARN", lines + waiver, waivers=waivers)
+        return report("diff-size", "FAIL", lines + waiver, waivers=waivers)
 
     if total > hard:
         lines = detail + [
@@ -73,8 +75,8 @@ def run(args, config):
             "sequential PRs, or ask a maintainer to add the `oversize` label.",
         ] + waiver_lines("oversize", trusted, claims)
         if "oversize" in trusted:
-            return report("diff-size", "WARN", lines)
-        return report("diff-size", "FAIL", lines)
+            return report("diff-size", "WARN", lines, waivers=waivers)
+        return report("diff-size", "FAIL", lines, waivers=waivers)
 
     if total > soft:
         return report("diff-size", "WARN", detail + ["over the soft limit - consider splitting."])
