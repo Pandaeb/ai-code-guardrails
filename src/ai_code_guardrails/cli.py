@@ -3,7 +3,7 @@
 Usage:
     ai-code-guardrails check --base origin/main [--head HEAD]
         [--feature <name>] [--config <path>] [--registry-check]
-        [--skip guard1,guard2] [--format human|json]
+        [--skip guard1,guard2] [--format human|json|sarif]
 
 The feature name (for the scope and deps guards) is taken from --feature,
 else the GUARDRAILS_FEATURE / GITHUB_HEAD_REF / CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
@@ -32,6 +32,7 @@ import os
 from . import __version__
 from ._core import load_config, report, run_git, start_collecting, stop_collecting
 from .guards import GUARD_ORDER, RUNNERS
+from .sarif import to_sarif
 
 # The machine-readable schema is a public contract, versioned separately
 # from the package: bump only on breaking changes to the JSON shape.
@@ -92,11 +93,19 @@ def run_check(args):
 
     if machine:
         entries = stop_collecting()
+        if args.format == "sarif":
+            print(json.dumps(to_sarif(entries, __version__), indent=2))
+            return exit_code
         doc = {
             "schema_version": SCHEMA_VERSION,
             "package": {"name": "ai-code-guardrails", "version": __version__},
             "check": {"base": args.base, "head": args.head, "feature": feature},
-            "guards": entries,
+            # The schema-v1 entry is guard/status/detail/waivers; findings
+            # are SARIF's file-level view of the same facts.
+            "guards": [
+                {k: e[k] for k in ("guard", "status", "detail", "waivers")}
+                for e in entries
+            ],
             "summary": {
                 status.lower(): sum(1 for e in entries if e["status"] == status)
                 for status in ("PASS", "WARN", "FAIL", "SKIP")
@@ -140,7 +149,7 @@ def main(argv=None):
     check.add_argument("--registry-check", action="store_true",
                        help="verify added dependencies exist on their registry (needs network)")
     check.add_argument("--skip", default="", help="comma-separated guard names to skip")
-    check.add_argument("--format", default="human", choices=["human", "json"],
+    check.add_argument("--format", default="human", choices=["human", "json", "sarif"],
                        help="output format (default: the human-readable report)")
 
     args = parser.parse_args(argv)

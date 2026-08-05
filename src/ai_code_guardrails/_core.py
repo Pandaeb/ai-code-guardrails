@@ -425,14 +425,20 @@ def stop_collecting():
     return collected or []
 
 
-def report(name, status, lines=None, waivers=None):
-    """status: PASS | WARN | FAIL | SKIP. Returns the exit code."""
+def report(name, status, lines=None, waivers=None, findings=None):
+    """status: PASS | WARN | FAIL | SKIP. Returns the exit code.
+
+    `findings` are optional file-level records ({"path", "message"}) for
+    machine formats that can point at files (SARIF); the human report
+    and the JSON schema carry the same facts inside `lines`.
+    """
     if _COLLECTOR is not None:
         _COLLECTOR.append({
             "guard": name,
             "status": status,
             "detail": list(lines or []),
             "waivers": list(waivers or []),
+            "findings": list(findings or []),
         })
     print("[%s] %s" % (status, name))
     for line in lines or []:

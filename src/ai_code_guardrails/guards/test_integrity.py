@@ -47,13 +47,14 @@ def run(args, config):
     assert_res = cfg["assert_patterns"]
     threshold = cfg["assert_loss_fail_threshold"]
 
-    deleted, weakened, warnings = [], [], []
+    deleted, weakened, warnings, findings = [], [], [], []
     patches = None
     for status, path in changed_files(args.base, args.head):
         if not matches_any(path, cfg["test_globs"]):
             continue
         if status == "D":
             deleted.append(path)
+            findings.append({"path": path, "message": "deleted test file"})
             continue
         if patches is None:
             patches = diff_by_path(args.base, args.head)
@@ -62,12 +63,16 @@ def run(args, config):
         new_skips = [l.strip() for l in added if any(re.search(p, l) for p in skip_res)]
         if new_skips:
             weakened.append("%s - added skip/focus marker(s): %s" % (path, "; ".join(new_skips[:3])))
+            findings.append({"path": path, "message": "added skip/focus marker(s): %s"
+                                                      % "; ".join(new_skips[:3])})
 
         loss = count_matches(removed, assert_res) - count_matches(added, assert_res)
         if loss >= threshold:
             weakened.append("%s - net assertion loss of %d" % (path, loss))
+            findings.append({"path": path, "message": "net assertion loss of %d" % loss})
         elif loss > 0:
             warnings.append("%s - net assertion loss of %d (below threshold)" % (path, loss))
+            findings.append({"path": path, "message": "net assertion loss of %d (below threshold)" % loss})
 
     trusted, claims = collect_acks(args.base, args.head)
     failures, waivers = [], []
@@ -97,7 +102,8 @@ def run(args, config):
                 "maintainer for the matching waiver label.",
             ],
             waivers=waivers,
+            findings=findings,
         )
     if warnings:
-        return report("test-integrity", "WARN", warnings, waivers=waivers)
+        return report("test-integrity", "WARN", warnings, waivers=waivers, findings=findings)
     return report("test-integrity", "PASS", ["no test deletions, skips, or assertion loss"])
