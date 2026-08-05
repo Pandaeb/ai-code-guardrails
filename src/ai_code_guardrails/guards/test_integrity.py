@@ -21,6 +21,7 @@ from .._core import (
     matches_any,
     report,
     waiver_lines,
+    waiver_state,
 )
 
 
@@ -69,7 +70,11 @@ def run(args, config):
             warnings.append("%s - net assertion loss of %d (below threshold)" % (path, loss))
 
     trusted, claims = collect_acks(args.base, args.head)
-    failures = []
+    failures, waivers = [], []
+    if deleted:
+        waivers += waiver_state("test-removal", trusted, claims)
+    if weakened:
+        waivers += waiver_state("test-weakening", trusted, claims)
     if deleted and "test-removal" not in trusted:
         failures += ["deleted test file: %s" % p for p in deleted]
         failures += waiver_lines("test-removal", trusted, claims)
@@ -91,7 +96,8 @@ def run(args, config):
                 "is legitimate - call it out in the PR description and ask a",
                 "maintainer for the matching waiver label.",
             ],
+            waivers=waivers,
         )
     if warnings:
-        return report("test-integrity", "WARN", warnings)
+        return report("test-integrity", "WARN", warnings, waivers=waivers)
     return report("test-integrity", "PASS", ["no test deletions, skips, or assertion loss"])
