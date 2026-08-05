@@ -28,6 +28,25 @@ This project is a defence layer, so its threat model is wider than
 False positives — a guard firing on legitimate code — are **not**
 security reports; please open a regular issue for those.
 
+## Trust boundary: the token you give your agent
+
+"Waivers are human-only" is enforced through GitHub's permission model:
+a waiver is a PR label, and applying a label requires **triage**
+permission, which the author of an agent-written PR does not have. That
+floor holds against the *author* of the change — it says nothing about
+what your agent can do with the credentials you hand it.
+
+If you run an AI agent with a token that carries triage or maintainer
+permission (a bot account with write access, a maintainer's PAT, a
+GitHub App with `issues: write`), that agent can apply waiver labels to
+its own PRs, and the guards will honour them — the guards see a label,
+not the judgement behind it. This is not a bypass of the tool; it is a
+configuration that steps outside its trust model.
+
+**Recommendation:** agents that author code get tokens with no
+permission to edit labels. Keep triage for humans and for automation
+you trust as much as a human reviewer.
+
 ## Supported versions
 
 Pre-1.0, only the latest released version is supported with fixes.
