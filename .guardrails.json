@@ -11,5 +11,11 @@
       "src/ai_code_guardrails/**",
       "tests/redteam/**"
     ]
+  },
+  "test_integrity": {
+    "_comment": "The default **/tests/** glob would scan tests/redteam/cases.py, whose case trees deliberately CONTAIN skip markers and weakened asserts as attack payloads - data, not tests. The real suite is tests/test_*.py; corpus changes are gated by selfmod.protected_paths instead.",
+    "test_globs": [
+      "tests/test_*.py"
+    ]
   }
 }
