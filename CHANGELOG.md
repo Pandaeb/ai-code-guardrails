@@ -14,8 +14,19 @@ A guard bypass is a vulnerability, not a changelog entry — see
 - Dependency guard covers the routes that bypass a manifest's dependency
   list: a lockfile authorising a direct dependency the manifest does not
   name, a new git submodule, and an added or changed install-time script
-  (`preinstall`/`install`/`postinstall`/`prepare`/`prepublish`). Corpus
-  grows to 28 attacks / 16 controls.
+  (`preinstall`/`install`/`postinstall`/`prepare`/`prepublish`).
+- New **suppression** guard: silencing the type checker or linter
+  instead of fixing the code. Inline markers (`# type: ignore`,
+  `@ts-ignore`, `eslint-disable`, `# noqa`, …) warn below
+  `added_fail_threshold` and fail at or above it; switching a rule off
+  in a linter's configuration fails on the first occurrence. Waivable
+  by the new `suppression` label. Corpus grows to 32 attacks /
+  19 controls.
+
+### Changed
+
+- **New waiver label required:** repositories using the guards should
+  create a `suppression` label alongside the existing five.
 
 ## [0.1.0] — 2026-08-05
 

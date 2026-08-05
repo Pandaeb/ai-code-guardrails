@@ -19,6 +19,12 @@
       "tests/test_*.py"
     ]
   },
+  "suppression": {
+    "_comment": "tests/redteam/cases.py carries suppression markers (# type: ignore, @ts-ignore, rules switched off) as ATTACK PAYLOADS inside string literals - data, not code the analyser reads. Same reasoning as test_integrity.test_globs above; corpus changes are gated by selfmod.protected_paths instead.",
+    "exclude": [
+      "tests/redteam/**"
+    ]
+  },
   "deps": {
     "_comment": "Zero runtime dependencies is a floor of this package. The declaration file deliberately does not exist: an explicitly configured policy with no usable declaration file FAILS every new dependency, so adding one forces creating docs/dependencies.md (and the argument for it) in the same PR.",
     "declaration_files": [
