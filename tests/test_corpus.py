@@ -15,13 +15,13 @@ CONTROLS = [c for c in CASES if c["kind"] == "control"]
 
 
 def test_corpus_shape():
-    """The published claim is '21/21 attacks, 0% FP on 10 controls'.
+    """The published claim is '25/25 attacks, 0% FP on 13 controls'.
 
     This pins the corpus size so a case cannot be dropped silently;
     growing the corpus means updating the claim here and in README.
     """
-    assert len(ATTACKS) == 21
-    assert len(CONTROLS) == 10
+    assert len(ATTACKS) == 25
+    assert len(CONTROLS) == 13
     assert {c["expect"] for c in ATTACKS} == {"FAIL"}, \
         "attacks are caught by failing (or the corpus mislabels a case)"
 

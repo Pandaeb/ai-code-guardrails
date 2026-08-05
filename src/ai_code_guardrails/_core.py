@@ -71,9 +71,17 @@ DEFAULT_CONFIG = {
         "exempt_audit_limit": 800,
     },
     "scope": {
-        # Paths every PR may touch regardless of the task's declared files.
+        # Spec-less scope declaration: a repo-level allow-list, read from
+        # the BASE ref like every other declaration. Used when no
+        # SpecForge tasks.md exists for the feature.
+        "declaration_file": ".guardrails/scope.yml",
+        # Paths every PR may touch regardless of the task's declared
+        # files. `.guardrails/**` must be editable for the scope file to
+        # be bootstrappable at all — editing it never widens the CURRENT
+        # PR's permissions, because the declaration is read from base.
         "always_allow": [
             ".specforge/**",
+            ".guardrails/**",
             ".env.example",
         ],
     },
@@ -125,10 +133,17 @@ DEFAULT_CONFIG = {
     },
     "deps": {
         # Where new dependencies must be declared (searched at HEAD).
-        # {feature} is substituted when a feature name is known.
+        # {feature} is substituted when a feature name is known. The
+        # `.specforge/` entries are the legacy SpecForge layout; the
+        # last two are the spec-less defaults. When NONE of these exist
+        # the guard warns with instructions instead of failing — but a
+        # repo that configured this key explicitly has promised a
+        # policy, and an unusable one fails (see guards/deps.py).
         "declaration_files": [
             ".specforge/specs/{feature}/architecture.md",
             ".specforge/steering/tech.md",
+            "DEPENDENCIES.md",
+            "docs/dependencies.md",
         ],
     },
     "review": {
@@ -219,13 +234,20 @@ def load_config(path=None, base=None):
                 if candidate.is_file():
                     text = candidate.read_text(encoding="utf-8")
                     break
+    user_keys = []
     if text:
         user = json.loads(text)
         for section, values in user.items():
             if isinstance(values, dict):
                 cfg.setdefault(section, {}).update(values)
+                user_keys += ["%s.%s" % (section, key) for key in values]
             else:
                 cfg[section] = values
+                user_keys.append(section)
+    # Which keys the project set explicitly (vs. built-in defaults) —
+    # "you configured a policy" and "you never thought about it" deserve
+    # different failure modes (see guards/deps.py).
+    cfg["_user_keys"] = user_keys
     return cfg
 
 

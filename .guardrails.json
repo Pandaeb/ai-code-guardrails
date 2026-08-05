@@ -17,5 +17,11 @@
     "test_globs": [
       "tests/test_*.py"
     ]
+  },
+  "deps": {
+    "_comment": "Zero runtime dependencies is a floor of this package. The declaration file deliberately does not exist: an explicitly configured policy with no usable declaration file FAILS every new dependency, so adding one forces creating docs/dependencies.md (and the argument for it) in the same PR.",
+    "declaration_files": [
+      "docs/dependencies.md"
+    ]
   }
 }

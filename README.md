@@ -1,6 +1,6 @@
 # ai-code-guardrails
 
-Deterministic guardrails for AI-written code. **Catches 21 of 21 known
+Deterministic guardrails for AI-written code. **Catches 25 of 25 known
 failure modes of AI-generated changes, at 0% false positives on the
 control corpus** — and ships the corpus so you can verify that claim
 yourself.
@@ -25,7 +25,7 @@ in any CI and locally. No runtime dependencies — stdlib Python only.
 | Guard | Catches |
 |---|---|
 | **diff budget** | PRs past reviewable size (default: warn at 400 changed lines, fail at 800), including evasion via fake "generated"/"vendored" file names — claimed exemptions are counted and capped |
-| **scope discipline** | files the declared task never authorised — declarations are read from the base ref, so a PR can't widen its own permission slip |
+| **scope discipline** | files the declared scope never authorised — works from a SpecForge task spec or a plain `.guardrails/scope.yml` allow-list; either declaration is read from the base ref, so a PR can't widen its own permission slip |
 | **test integrity** | deleted test files, added skip/focus markers, net assertion loss |
 | **dependency policy** | dependencies absent from the project's declaration file (with machine-recognisable matching — a package named `is` can't hide in prose), optional registry-existence check against slopsquatting |
 | **self-modification** | any PR touching the guards' own code or config without a human-applied label |
@@ -38,8 +38,8 @@ self-waivers.
 
 ## Verify the claim
 
-The red-team corpus is executable: 21 attacks that must be caught and
-10 legitimate controls that must stay quiet, each a throwaway git
+The red-team corpus is executable: 25 attacks that must be caught and
+13 legitimate controls that must stay quiet, each a throwaway git
 repository whose diff *is* the attack. It runs as this package's test
 suite:
 
@@ -89,9 +89,10 @@ ai-code-guardrails check --base origin/main
 That compares `origin/main...HEAD` and prints one verdict per guard
 plus a summary; exit code 1 means at least one guard failed. On a
 repository with no configuration at all you get sensible behaviour:
-diff budget (400/800), test integrity, and dependency policy are live,
-the scope guard skips (it needs a declared task scope), and
-self-modification watches `.guardrails.json`.
+diff budget (400/800) and test integrity are live, dependency policy
+warns with setup instructions until a declaration file exists (then
+undeclared additions fail), the scope guard skips until you declare a
+scope (see below), and self-modification watches `.guardrails.json`.
 
 ## Wire it into CI
 
@@ -188,6 +189,37 @@ the self-modification guard):
 
 Every key overrides the built-in defaults per section; this repository's
 own [.guardrails.json](.guardrails.json) is a working example.
+
+### Scope without specs
+
+Teams that will never write a task spec declare scope in
+`.guardrails/scope.yml` — one `allow:` key, a list of globs (a
+deliberately minimal YAML subset; the package stays stdlib-only):
+
+```yaml
+# What the current change stream is allowed to touch.
+allow:
+  - src/payments/**
+  - tests/**
+```
+
+Land it on the main branch first: like every declaration it is **read
+from the base ref**, so editing it inside a PR never widens that same
+PR's permissions — the edit is reported and takes effect only after it
+is reviewed and merged. A PR that introduces the file for the first
+time is judged by it but flagged as carrying an unreviewed declaration.
+The PR description is never a scope provider: the agent writes it.
+
+### Dependency declarations
+
+New dependencies must be named — backticked, quoted, or as a list
+entry — in one of the declaration files: `DEPENDENCIES.md`,
+`docs/dependencies.md`, a SpecForge `tech.md`/`architecture.md`, or
+whatever `deps.declaration_files` points at. No declaration file at
+all: the guard warns with instructions instead of failing. An
+explicitly configured policy under which nothing could ever be
+declared (empty list, missing files) fails — a promised policy that
+cannot pass is a broken promise, not a free pass.
 
 ## License
 
