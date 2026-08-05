@@ -70,19 +70,9 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install the package
-        run: python -m pip install -e .
-
-      # $GITHUB_BASE_REF is runner-provided env, not expression
-      # interpolation — nothing attacker-controlled is spliced into the
-      # script text.
-      - name: Run ai-code-guardrails check
-        run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD
-        env:
-          # PR labels are the ONLY trusted waiver surface: adding one
-          # needs triage permission, which is what makes waivers
-          # human-only.
-          GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          # The PR body is passed for REPORTING only — a guard-ack found
-          # here is an attempted self-waiver and still fails the guard.
-          GUARDRAILS_PR_BODY: ${{ github.event.pull_request.body }}
+      # Dogfood the composite action from this very ref — the same
+      # entry point adopters pin (`uses: Pandaeb/ai-code-guardrails@<tag>`).
+      # It installs the package and wires GUARDRAILS_ACKS (PR labels,
+      # the only trusted waiver surface) and GUARDRAILS_PR_BODY
+      # (reporting only) itself.
+      - uses: ./

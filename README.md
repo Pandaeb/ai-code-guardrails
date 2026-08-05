@@ -96,6 +96,10 @@ scope (see below), and self-modification watches `.guardrails.json`.
 
 ## Wire it into CI
 
+The published action is the whole job. It installs the package **from
+the action's own pinned ref** — never from the repository under
+review — and wires the waiver surfaces itself:
+
 ```yaml
 permissions:
   contents: read
@@ -112,6 +116,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # the guards diff against the base branch
+      - uses: Pandaeb/ai-code-guardrails@v0.1.0
+```
+
+Inputs, all optional: `base` (default: the PR's target branch), `head`,
+`feature`, `config`, `registry-check`, `format`. Pin a tag — the action
+is the root of trust for the whole setup.
+
+Without the action, the same job by hand:
+
+```yaml
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -154,14 +168,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: Pandaeb/ai-code-guardrails@v0.1.0
         with:
-          python-version: "3.13"
-      - run: pip install git+https://github.com/Pandaeb/ai-code-guardrails@main
-      - run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD --format sarif > guardrails.sarif
-        env:
-          GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          GUARDRAILS_PR_BODY: ${{ github.event.pull_request.body }}
+          format: sarif # also written to guardrails.sarif
       - uses: github/codeql-action/upload-sarif@v3
         # The check step exits 1 when a guard fails - upload the
         # annotations exactly then, and keep the job red.

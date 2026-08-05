@@ -1,0 +1,93 @@
+# Reusable composite action — the root of trust for adopters who run
+# the guards via `uses:`. Deliberately minimal: install the package
+# FROM THE ACTION'S OWN PINNED REF (never from the repository under
+# review), wire the waiver surfaces, run `check`. The iron workflow
+# rules (CONTRIBUTING.md) apply here first: untrusted input reaches
+# scripts only via env vars, no secrets, no pull_request_target.
+name: ai-code-guardrails
+description: >-
+  Deterministic guardrails for AI-written code — diff budget, scope
+  discipline, test integrity, dependency policy, self-modification —
+  verified against an executable red-team corpus.
+author: Paweł Szulc
+
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  base:
+    description: >-
+      Base ref to diff against. Default: origin/$GITHUB_BASE_REF, the
+      PR's target branch. The checkout must use fetch-depth: 0.
+    required: false
+    default: ""
+  head:
+    description: Head ref of the change under review.
+    required: false
+    default: HEAD
+  feature:
+    description: >-
+      Feature name for the scope and deps guards. Default: derived
+      from the branch name.
+    required: false
+    default: ""
+  config:
+    description: >-
+      Explicit config file path. Default: .guardrails.json read from
+      the base ref, so the PR cannot supply its own thresholds.
+    required: false
+    default: ""
+  registry-check:
+    description: >-
+      "true" verifies added dependencies exist on their registry
+      (anti-slopsquatting; needs network).
+    required: false
+    default: "false"
+  format:
+    description: >-
+      Output format: human, json, or sarif. json/sarif output is also
+      written to guardrails-report.json / guardrails.sarif in the
+      workspace for upload steps.
+    required: false
+    default: human
+
+runs:
+  using: composite
+  steps:
+    - name: Install ai-code-guardrails from the action's ref
+      shell: bash
+      # $GITHUB_ACTION_PATH is the checked-out tree of THIS action at
+      # the ref the caller pinned — the guard code can never come from
+      # the repository under review.
+      run: python3 -m pip install --quiet "$GITHUB_ACTION_PATH"
+
+    - name: Run the guards
+      shell: bash
+      env:
+        # Inputs and event fields reach the script only as env vars,
+        # quoted at use — never interpolated into the script text.
+        IN_BASE: ${{ inputs.base }}
+        IN_HEAD: ${{ inputs.head }}
+        IN_FEATURE: ${{ inputs.feature }}
+        IN_CONFIG: ${{ inputs.config }}
+        IN_REGISTRY_CHECK: ${{ inputs.registry-check }}
+        IN_FORMAT: ${{ inputs.format }}
+        # PR labels are the ONLY trusted waiver surface: adding one
+        # needs triage permission, which keeps waivers human-only.
+        GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        # The PR body is scanned for REPORTING only — a guard-ack found
+        # here is an attempted self-waiver and never changes a verdict.
+        GUARDRAILS_PR_BODY: ${{ github.event.pull_request.body }}
+      run: |
+        set -euo pipefail
+        args=(check --base "${IN_BASE:-origin/${GITHUB_BASE_REF}}" --head "$IN_HEAD")
+        if [ -n "$IN_FEATURE" ]; then args+=(--feature "$IN_FEATURE"); fi
+        if [ -n "$IN_CONFIG" ]; then args+=(--config "$IN_CONFIG"); fi
+        if [ "$IN_REGISTRY_CHECK" = "true" ]; then args+=(--registry-check); fi
+        case "$IN_FORMAT" in
+          human) python3 -m ai_code_guardrails "${args[@]}" ;;
+          json)  python3 -m ai_code_guardrails "${args[@]}" --format json  | tee guardrails-report.json ;;
+          sarif) python3 -m ai_code_guardrails "${args[@]}" --format sarif | tee guardrails.sarif ;;
+          *) echo "unknown format: $IN_FORMAT (human|json|sarif)" >&2; exit 2 ;;
+        esac
