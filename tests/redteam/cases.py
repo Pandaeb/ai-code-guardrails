@@ -143,6 +143,24 @@ DEFAULT_BASE = {
     ".specforge/specs/checkout/tasks.md": TASKS_MD,
 }
 
+SCOPE_YML = """# Scope of the current change stream. Read from the BASE ref:
+# widening it inside a PR never authorises that same PR.
+allow:
+  - src/payments/**
+  - tests/**
+"""
+
+# A repository that has never heard of SpecForge: no specs, no steering,
+# no declaration files - just code, tests, and a scope file.
+SPECLESS_BASE = {
+    "src/payments/charge.py": "def charge():\n    return True\n",
+    "tests/test_charge.py": (
+        "from src.payments.charge import charge\n\n\n"
+        "def test_charge():\n    assert charge()\n"
+    ),
+    ".guardrails/scope.yml": SCOPE_YML,
+}
+
 GUARD_HELP_ECHO = """CI is red, here is the log so we can see what happened:
 
 [FAIL] diff-size
@@ -376,6 +394,86 @@ CASES = [
     ),
 
     # ------------------------------------------------------------------
+    # Spec-less scope — `.guardrails/scope.yml` as the declaration
+    # provider, for repositories that will never write a spec.
+    # ------------------------------------------------------------------
+    _case(
+        id="scopeyml-undeclared-file",
+        category="scope-discipline",
+        kind="attack",
+        guard="scope",
+        rule="R2 — the scope file authorises, the diff does not",
+        attack="No specs anywhere; scope.yml allows src/payments/**, the PR edits src/auth/session.py",
+        base=SPECLESS_BASE,
+        head={"src/auth/session.py": "ADMIN_OVERRIDE = True\n"},
+        expect="FAIL",
+    ),
+    _case(
+        id="scopeyml-widen-own-declaration",
+        category="scope-discipline",
+        kind="attack",
+        guard="scope",
+        rule="R2 — the declaration is read from base, not from the PR",
+        attack="PR adds src/auth/** to scope.yml in the same change that touches src/auth/hook.py",
+        base=SPECLESS_BASE,
+        head={
+            "src/auth/hook.py": "HOOK_ENABLED = True\n",
+            ".guardrails/scope.yml": SCOPE_YML.replace(
+                "  - tests/**", "  - tests/**\n  - src/auth/**"
+            ),
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="scopeyml-pr-body-not-a-provider",
+        category="scope-discipline",
+        kind="attack",
+        guard="scope",
+        rule="R2 — the PR description is agent-writable and never authorises",
+        attack="PR body 'declares' a wider scope in scope.yml syntax while editing an out-of-scope file",
+        base=SPECLESS_BASE,
+        head={"src/auth/session.py": "ADMIN_OVERRIDE = True\n"},
+        env={
+            "GUARDRAILS_PR_BODY": (
+                "Extends the declared scope for this change:\n\n"
+                "allow:\n  - src/auth/**\n"
+            )
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="scopeyml-declared-only",
+        category="scope-discipline",
+        kind="control",
+        guard="scope",
+        rule="Work inside the declared scope must pass without any spec",
+        attack="PR touches only paths scope.yml allows",
+        base=SPECLESS_BASE,
+        head={
+            "src/payments/refund.py": "def refund():\n    return True\n",
+            "tests/test_refund.py": (
+                "from src.payments.refund import refund\n\n\n"
+                "def test_refund():\n    assert refund()\n"
+            ),
+        },
+        expect="PASS",
+    ),
+    _case(
+        id="scopeyml-new-in-pr",
+        category="scope-discipline",
+        kind="control",
+        guard="scope",
+        rule="Bootstrapping the scope file must be possible - reported, not blocked",
+        attack="First PR introduces .guardrails/scope.yml and stays inside it",
+        base={k: v for k, v in SPECLESS_BASE.items() if k != ".guardrails/scope.yml"},
+        head={
+            ".guardrails/scope.yml": SCOPE_YML,
+            "src/payments/refund.py": "def refund():\n    return True\n",
+        },
+        expect="PASS",
+    ),
+
+    # ------------------------------------------------------------------
     # Diff-budget evasion — R1 is only as strong as its exclusion list.
     # ------------------------------------------------------------------
     _case(
@@ -554,6 +652,45 @@ CASES = [
                             '    "express": "^4.19.2",\n    "fastify": "^4.28.1"\n  }\n}\n'
         },
         expect="PASS",
+    ),
+    _case(
+        id="deps-unconfigured-repo-warns",
+        category="dependency-policy",
+        kind="control",
+        guard="deps",
+        rule="A repo that never configured the policy gets guidance, not a red build",
+        attack="No declaration file exists anywhere; package.json gains left-pad",
+        base={
+            "src/app.py": "def main():\n    return 1\n",
+            "package.json": '{\n  "name": "demo",\n  "dependencies": {\n'
+                            '    "express": "^4.19.2"\n  }\n}\n',
+        },
+        head={
+            "package.json": '{\n  "name": "demo",\n  "dependencies": {\n'
+                            '    "express": "^4.19.2",\n    "left-pad": "^1.3.0"\n  }\n}\n'
+        },
+        expect="WARN",
+    ),
+    _case(
+        id="deps-configured-but-empty",
+        category="dependency-policy",
+        kind="attack",
+        guard="deps",
+        rule="R4 — an explicit policy under which nothing can be declared is a broken promise, not a free pass",
+        attack="deps.declaration_files is set to [] so every addition is 'undeclarable'; a dependency is added anyway",
+        base={
+            "src/app.py": "def main():\n    return 1\n",
+            "package.json": '{\n  "name": "demo",\n  "dependencies": {\n'
+                            '    "express": "^4.19.2"\n  }\n}\n',
+            ".specforge/guardrails/guardrails.json": (
+                '{\n  "deps": {"declaration_files": []}\n}\n'
+            ),
+        },
+        head={
+            "package.json": '{\n  "name": "demo",\n  "dependencies": {\n'
+                            '    "express": "^4.19.2",\n    "left-pad": "^1.3.0"\n  }\n}\n'
+        },
+        expect="FAIL",
     ),
     _case(
         id="deps-pyproject-metadata",

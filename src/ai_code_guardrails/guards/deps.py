@@ -5,9 +5,18 @@ ADDED dependency must be named in one of the configured declaration
 files — otherwise FAIL unless a human waiver (the `new-dependency` PR
 label) is present.
 
+A repository that never configured the policy and has none of the
+default declaration files gets a WARN with setup instructions, not a
+red build — there is no policy to enforce yet. A repository that set
+`deps.declaration_files` explicitly has promised a policy, so a
+configuration under which nothing could ever be declared (empty list,
+missing files) FAILs.
+
 Optional `--registry-check` verifies each added name exists on its
 ecosystem's canonical registry (anti-slopsquatting; needs network, so it's
 off by default — unreachable registries WARN, they never fail the build).
+A name missing from its registry fails regardless of declaration policy:
+a hallucinated dependency is not a paperwork problem.
 
 Manifest parsing is best-effort per format; unknown formats are ignored.
 """
@@ -255,6 +264,7 @@ def run(args, config):
 
     root = repo_root()
     declarations = ""
+    found_files = []
     for tmpl in cfg["declaration_files"]:
         rel = tmpl.format(feature=args.feature or "*")
         if "*" in rel:
@@ -262,41 +272,66 @@ def run(args, config):
         text = show_file(args.head, rel)
         if text is None:
             candidate = root / rel
-            text = candidate.read_text(encoding="utf-8") if candidate.is_file() else ""
+            text = candidate.read_text(encoding="utf-8") if candidate.is_file() else None
+        if text is None:
+            continue
+        found_files.append(rel)
         declarations += "\n" + text.lower()
 
-    undeclared, notes, findings = [], [], []
+    explicit = "deps.declaration_files" in config.get("_user_keys", ())
+    enforce = bool(found_files) or explicit
+
+    undeclared, registry_failures, notes, findings = [], [], [], []
     for name, (ecosystem, path) in sorted(added.items()):
         if is_declared(name, declarations):
             notes.append("%s (%s) - declared" % (name, path))
         else:
             undeclared.append("%s (added in %s, not named in %s)"
-                              % (name, path, " / ".join(cfg["declaration_files"])))
+                              % (name, path, " / ".join(cfg["declaration_files"]) or "<nothing>"))
             findings.append({"path": path, "message": "dependency `%s` added but not named "
                                                       "in a declaration file" % name})
         if args.registry_check:
             exists = registry_exists(ecosystem, name)
             if exists is False:
-                undeclared.append("%s - NOT FOUND on the %s registry (hallucinated name?)"
-                                  % (name, ecosystem))
+                registry_failures.append("%s - NOT FOUND on the %s registry (hallucinated name?)"
+                                         % (name, ecosystem))
                 findings.append({"path": path, "message": "dependency `%s` NOT FOUND on the "
                                                           "%s registry (hallucinated name?)"
                                                           % (name, ecosystem)})
             elif exists is None:
                 notes.append("%s - registry not checkable for %s" % (name, ecosystem))
 
-    if not undeclared:
+    if not undeclared and not registry_failures:
         return report("deps", "PASS", ["%d new dependencies, all declared" % len(added)] + notes)
+
+    failures = list(registry_failures)  # hallucinated names fail in any mode
+    if enforce:
+        failures += undeclared
+        if explicit and not found_files:
+            failures.append(
+                "deps.declaration_files is configured, but none of the listed "
+                "files exist - nothing could ever be declared under this policy."
+            )
+
+    if not failures:
+        # Unconfigured repository: guidance instead of a red build.
+        return report("deps", "WARN", undeclared + [
+            "no dependency declaration file found, so the policy cannot be",
+            "enforced yet. Name new dependencies (backticked or quoted) in",
+            "DEPENDENCIES.md or docs/dependencies.md, or point the config",
+            "key deps.declaration_files somewhere else - undeclared",
+            "additions then fail instead of warning.",
+        ], findings=findings)
 
     trusted, claims = collect_acks(args.base, args.head)
     waiver = waiver_lines("new-dependency", trusted, claims)
     waivers = waiver_state("new-dependency", trusted, claims)
     if "new-dependency" in trusted:
-        return report("deps", "WARN", undeclared + waiver, waivers=waivers, findings=findings)
+        return report("deps", "WARN", failures + waiver, waivers=waivers, findings=findings)
     return report(
         "deps",
         "FAIL",
-        undeclared
+        failures
         + notes
         + waiver
         + [

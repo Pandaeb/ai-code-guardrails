@@ -79,13 +79,6 @@ def run_check(args):
                     # (diff-size, test-integrity), not the registry keys.
                     report(guard.replace("_", "-"), "SKIP", ["skipped via --skip"])
                 continue
-            if guard == "scope" and not feature:
-                if machine:
-                    report(guard, "SKIP", ["no feature name detectable"])
-                else:
-                    print("[SKIP] scope — no feature name detectable")
-                results[guard] = "SKIP"
-                continue
             code = RUNNERS[guard](args, config)
             results[guard] = "FAIL" if code else "OK"
 
