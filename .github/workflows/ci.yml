@@ -1,0 +1,88 @@
+# CI for ai-code-guardrails.
+#
+# Two jobs, both wired as REQUIRED status checks via branch protection:
+#   corpus — the red-team corpus as pytest: 21 attacks must stay caught,
+#            10 controls must stay quiet. A regression here is a product
+#            defect, so it blocks the merge button.
+#   guards — dogfooding: the package's own `check` runs on every PR of
+#            this repository, judging the PR by the config on the BASE
+#            ref (.guardrails.json protects the guard sources, the
+#            corpus, and the workflows — changes need the human-applied
+#            `guardrail-change` label).
+#
+# Workflow security rules (CONTRIBUTING.md, non-negotiable):
+#   - never pull_request_target; the read-only default token is enough
+#   - untrusted input (PR body, labels, branch names) reaches scripts
+#     only via env vars, never interpolated into run:
+#   - permissions: contents: read
+#   - GitHub-hosted runners only
+#   - no long-lived secrets; publishing will use trusted publishing (OIDC)
+#
+# Action pins web-verified 2026-08.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # `labeled` / `unlabeled` are load-bearing: PR labels are the ONLY
+    # trusted waiver surface, and the default trigger set would not
+    # re-run the guards when a maintainer adds one — the waiver would
+    # appear to do nothing until somebody pushed another commit.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    strategy:
+      # Both versions are required checks — always report both instead of
+      # cancelling the sibling when one fails.
+      fail-fast: false
+      matrix:
+        # Oldest supported (exercises the tomllib fallback) and current.
+        python: ["3.9", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the package
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run the red-team corpus
+        run: python -m pytest
+
+  guards:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # guards diff against the base branch — full history needed
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install the package
+        run: python -m pip install -e .
+
+      # $GITHUB_BASE_REF is runner-provided env, not expression
+      # interpolation — nothing attacker-controlled is spliced into the
+      # script text.
+      - name: Run ai-code-guardrails check
+        run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD
+        env:
+          # PR labels are the ONLY trusted waiver surface: adding one
+          # needs triage permission, which is what makes waivers
+          # human-only.
+          GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          # The PR body is passed for REPORTING only — a guard-ack found
+          # here is an attempted self-waiver and still fails the guard.
+          GUARDRAILS_PR_BODY: ${{ github.event.pull_request.body }}

@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-code-guardrails"
+dynamic = ["version"]
+description = "Deterministic guardrails for AI-written code: diff budget, scope discipline, test integrity, dependency policy — proven against an executable red-team corpus."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "FSL-1.1-MIT"
+license-files = ["LICENSE.md"]
+authors = [{ name = "Paweł Szulc" }]
+keywords = [
+  "ai",
+  "llm",
+  "guardrails",
+  "code-review",
+  "pull-request",
+  "diff",
+  "ci",
+  "supply-chain",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Quality Assurance",
+]
+# Runtime dependencies: none, deliberately. The guards are stdlib-only so
+# they can run in any CI without a resolver step — and so this package can
+# never be the supply-chain risk it polices.
+dependencies = []
+
+[project.scripts]
+ai-code-guardrails = "ai_code_guardrails.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Pandaeb/ai-code-guardrails"
+Source = "https://github.com/Pandaeb/ai-code-guardrails"
+Issues = "https://github.com/Pandaeb/ai-code-guardrails/issues"
+Changelog = "https://github.com/Pandaeb/ai-code-guardrails/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.hatch.version]
+path = "src/ai_code_guardrails/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_code_guardrails"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
