@@ -99,6 +99,11 @@ def run(args, config):
 
     trusted, claims = collect_acks(args.base, args.head)
     waivers = waiver_state("scope", trusted, claims)
+    findings = [
+        {"path": v, "message": "not declared in the task's 'Files to create/modify' "
+                               "(read from %s)" % args.base}
+        for v in violations
+    ]
     lines = (
         ["files not declared in tasks.md 'Files to create/modify' (as of %s):" % args.base]
         + ["  " + v for v in violations]
@@ -106,7 +111,7 @@ def run(args, config):
         + waiver_lines("scope", trusted, claims)
     )
     if "scope" in trusted:
-        return report("scope", "WARN", lines, waivers=waivers)
+        return report("scope", "WARN", lines, waivers=waivers, findings=findings)
     return report(
         "scope",
         "FAIL",
@@ -117,4 +122,5 @@ def run(args, config):
             "the `scope` label.",
         ],
         waivers=waivers,
+        findings=findings,
     )
