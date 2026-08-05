@@ -1,0 +1,15 @@
+{
+  "_comment": "Config for running ai-code-guardrails on its own repository. selfmod.protected_paths makes any PR touching the guard sources, the corpus, the workflows, or this file itself require the human-applied `guardrail-change` label - the same discipline the package enforces for its adopters.",
+  "diff_size": {
+    "soft_limit": 400,
+    "hard_limit": 800
+  },
+  "selfmod": {
+    "protected_paths": [
+      ".guardrails.json",
+      ".github/workflows/**",
+      "src/ai_code_guardrails/**",
+      "tests/redteam/**"
+    ]
+  }
+}
