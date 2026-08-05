@@ -38,6 +38,9 @@ permissions:
 jobs:
   corpus:
     strategy:
+      # Both versions are required checks — always report both instead of
+      # cancelling the sibling when one fails.
+      fail-fast: false
       matrix:
         # Oldest supported (exercises the tomllib fallback) and current.
         python: ["3.9", "3.13"]

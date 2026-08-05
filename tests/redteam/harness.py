@@ -57,7 +57,9 @@ def write_tree(root, files):
                 target.unlink()
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8", newline="\n")
+        # Path.write_text() grew `newline` only in 3.10; open() has it everywhere.
+        with target.open("w", encoding="utf-8", newline="\n") as fh:
+            fh.write(content)
 
 
 def build_repo(case, workdir):
