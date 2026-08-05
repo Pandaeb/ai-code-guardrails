@@ -8,6 +8,7 @@
     "protected_paths": [
       ".guardrails.json",
       ".github/workflows/**",
+      "action.yml",
       "src/ai_code_guardrails/**",
       "tests/redteam/**"
     ]
