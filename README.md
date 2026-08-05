@@ -54,6 +54,99 @@ Controls are not optional decoration: a detection rate is only
 meaningful next to a false-positive rate. A guard that flags everything
 scores 100% on attacks and gets uninstalled within a week.
 
+## Install
+
+Not on PyPI yet — install straight from GitHub:
+
+```bash
+pipx install git+https://github.com/Pandaeb/ai-code-guardrails
+```
+
+or, without pipx:
+
+```bash
+pip install git+https://github.com/Pandaeb/ai-code-guardrails
+```
+
+or, for hacking on it:
+
+```bash
+git clone https://github.com/Pandaeb/ai-code-guardrails
+cd ai-code-guardrails
+pip install -e ".[dev]"
+```
+
+Python 3.9+, no runtime dependencies, works anywhere `git` does.
+
+## Run it on your repository
+
+From inside any git repository with an open change:
+
+```bash
+ai-code-guardrails check --base origin/main
+```
+
+That compares `origin/main...HEAD` and prints one verdict per guard
+plus a summary; exit code 1 means at least one guard failed. On a
+repository with no configuration at all you get sensible behaviour:
+diff budget (400/800), test integrity, and dependency policy are live,
+the scope guard skips (it needs a declared task scope), and
+self-modification watches `.guardrails.json`.
+
+## Wire it into CI
+
+```yaml
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    # labeled/unlabeled matter: adding a waiver label must re-run the guards
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the guards diff against the base branch
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install git+https://github.com/Pandaeb/ai-code-guardrails@main
+      - run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD
+        env:
+          GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          GUARDRAILS_PR_BODY: ${{ github.event.pull_request.body }}
+```
+
+Then create the waiver labels (`oversize`, `scope`, `test-removal`,
+`test-weakening`, `new-dependency`, `guardrail-change`) and make the
+check required in branch protection. The package installs from outside
+the repository under review — pin `@main` to a tag once releases exist —
+so a PR cannot rewrite the checks that judge it.
+
+## Configure
+
+Optional `.guardrails.json` at the repository root — read from the
+**base** ref, so a PR editing it is judged by the old rules (and trips
+the self-modification guard):
+
+```json
+{
+  "diff_size": { "soft_limit": 400, "hard_limit": 800 },
+  "selfmod": {
+    "protected_paths": [".guardrails.json", ".github/workflows/**"]
+  },
+  "deps": { "declaration_files": ["docs/dependencies.md"] },
+  "test_integrity": { "assert_loss_fail_threshold": 3 }
+}
+```
+
+Every key overrides the built-in defaults per section; this repository's
+own [.guardrails.json](.guardrails.json) is a working example.
+
 ## License
 
 [FSL-1.1-MIT](LICENSE.md) (Functional Source License): the source is
