@@ -20,9 +20,15 @@
     ]
   },
   "suppression": {
-    "_comment": "tests/redteam/cases.py carries suppression markers (# type: ignore, @ts-ignore, rules switched off) as ATTACK PAYLOADS inside string literals - data, not code the analyser reads. Same reasoning as test_integrity.test_globs above; corpus changes are gated by selfmod.protected_paths instead.",
+    "_comment": "Adds this package's own self-reference to the documentation defaults. tests/redteam/cases.py carries suppression markers as ATTACK PAYLOADS in string literals, and the two guard sources below DEFINE the marker patterns - none of it is code an analyser reads. A tool that detects suppressions necessarily contains suppressions; the corpus and the guard sources are gated by selfmod.protected_paths instead.",
     "exclude": [
-      "tests/redteam/**"
+      "**/*.md",
+      "**/*.rst",
+      "**/*.txt",
+      "**/*.adoc",
+      "tests/redteam/**",
+      "src/ai_code_guardrails/_core.py",
+      "src/ai_code_guardrails/guards/suppression.py"
     ]
   },
   "deps": {

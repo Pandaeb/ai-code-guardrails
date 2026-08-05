@@ -725,6 +725,21 @@ CASES = [
         expect="PASS",
     ),
     _case(
+        id="suppression-documented-in-prose",
+        category="suppression",
+        kind="control",
+        guard="suppression",
+        rule="Writing ABOUT suppressions is not suppressing anything",
+        attack="A style guide added to docs/ tells contributors never to use `# type: ignore` or `@ts-ignore`",
+        head={
+            "docs/style.md": "# Style\n\n"
+                             "Do not silence the type checker: `# type: ignore`,\n"
+                             "`@ts-ignore` and `eslint-disable` are not accepted in\n"
+                             "review - fix the underlying type instead.\n"
+        },
+        expect="PASS",
+    ),
+    _case(
         id="suppression-none",
         category="suppression",
         kind="control",

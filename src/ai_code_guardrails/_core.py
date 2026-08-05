@@ -172,9 +172,17 @@ DEFAULT_CONFIG = {
             r"^\s*ignore_errors\s*=\s*[Tt]rue",
             r"^\s*disable\s*[:=]",
         ],
-        # Paths whose contents are DATA, not code under analysis (a
-        # red-team corpus carrying suppression markers as payloads).
-        "exclude": [],
+        # Paths whose contents are not code an analyser ever reads.
+        # Prose ABOUT suppressions ("never add `# type: ignore`") is not
+        # a suppression, and a guard that fires on a style guide gets
+        # uninstalled. Extend this for data files that carry markers as
+        # payloads — e.g. a red-team corpus.
+        "exclude": [
+            "**/*.md",
+            "**/*.rst",
+            "**/*.txt",
+            "**/*.adoc",
+        ],
     },
     "deps": {
         # Where new dependencies must be declared (searched at HEAD).

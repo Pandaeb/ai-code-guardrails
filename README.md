@@ -40,7 +40,7 @@ self-waivers.
 ## Verify the claim
 
 The red-team corpus is executable: 32 attacks that must be caught and
-19 legitimate controls that must stay quiet, each a throwaway git
+20 legitimate controls that must stay quiet, each a throwaway git
 repository whose diff *is* the attack. It runs as this package's test
 suite:
 
@@ -57,16 +57,14 @@ scores 100% on attacks and gets uninstalled within a week.
 
 ## Install
 
-Not on PyPI yet — install straight from GitHub:
-
 ```bash
-pipx install git+https://github.com/Pandaeb/ai-code-guardrails
+pipx install ai-code-guardrails
 ```
 
 or, without pipx:
 
 ```bash
-pip install git+https://github.com/Pandaeb/ai-code-guardrails
+pip install ai-code-guardrails
 ```
 
 or, for hacking on it:
@@ -130,7 +128,7 @@ Without the action, the same job by hand:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - run: pip install git+https://github.com/Pandaeb/ai-code-guardrails@main
+      - run: pip install ai-code-guardrails==0.1.0
       - run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD
         env:
           GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
@@ -138,11 +136,10 @@ Without the action, the same job by hand:
 ```
 
 Then create the waiver labels (`oversize`, `scope`, `test-removal`,
-`test-weakening`, `new-dependency`, `suppression`, `guardrail-change`)
-and make the
-check required in branch protection. The package installs from outside
-the repository under review — pin `@main` to a tag once releases exist —
-so a PR cannot rewrite the checks that judge it.
+`test-weakening`, `suppression`, `new-dependency`, `guardrail-change`)
+and make the check required in branch protection. The guards install
+from outside the repository under review — pin the action to a released
+tag — so a PR cannot rewrite the checks that judge it.
 
 ## Machine-readable output
 
