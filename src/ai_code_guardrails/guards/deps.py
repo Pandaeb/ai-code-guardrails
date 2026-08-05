@@ -265,18 +265,23 @@ def run(args, config):
             text = candidate.read_text(encoding="utf-8") if candidate.is_file() else ""
         declarations += "\n" + text.lower()
 
-    undeclared, notes = [], []
+    undeclared, notes, findings = [], [], []
     for name, (ecosystem, path) in sorted(added.items()):
         if is_declared(name, declarations):
             notes.append("%s (%s) - declared" % (name, path))
         else:
             undeclared.append("%s (added in %s, not named in %s)"
                               % (name, path, " / ".join(cfg["declaration_files"])))
+            findings.append({"path": path, "message": "dependency `%s` added but not named "
+                                                      "in a declaration file" % name})
         if args.registry_check:
             exists = registry_exists(ecosystem, name)
             if exists is False:
                 undeclared.append("%s - NOT FOUND on the %s registry (hallucinated name?)"
                                   % (name, ecosystem))
+                findings.append({"path": path, "message": "dependency `%s` NOT FOUND on the "
+                                                          "%s registry (hallucinated name?)"
+                                                          % (name, ecosystem)})
             elif exists is None:
                 notes.append("%s - registry not checkable for %s" % (name, ecosystem))
 
@@ -287,7 +292,7 @@ def run(args, config):
     waiver = waiver_lines("new-dependency", trusted, claims)
     waivers = waiver_state("new-dependency", trusted, claims)
     if "new-dependency" in trusted:
-        return report("deps", "WARN", undeclared + waiver, waivers=waivers)
+        return report("deps", "WARN", undeclared + waiver, waivers=waivers, findings=findings)
     return report(
         "deps",
         "FAIL",
@@ -301,4 +306,5 @@ def run(args, config):
             "maintainer to add the `new-dependency` label.",
         ],
         waivers=waivers,
+        findings=findings,
     )

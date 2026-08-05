@@ -65,18 +65,28 @@ def run(args, config):
             "unreviewed diff needs a human to confirm the claim:",
         ] + ["%5d  %s" % (n, p) for n, p in sorted(claimed_exempt, reverse=True)[:10]]
         waiver = waiver_lines("oversize", trusted, claims)
+        findings = [
+            {"path": p, "message": "%d lines claim a generated/vendored exemption "
+                                   "(PR claims %d in total, audit limit %d)" % (n, exempt_total, exempt_limit)}
+            for n, p in sorted(claimed_exempt, reverse=True)[:10]
+        ]
         if "oversize" in trusted:
-            return report("diff-size", "WARN", lines + waiver, waivers=waivers)
-        return report("diff-size", "FAIL", lines + waiver, waivers=waivers)
+            return report("diff-size", "WARN", lines + waiver, waivers=waivers, findings=findings)
+        return report("diff-size", "FAIL", lines + waiver, waivers=waivers, findings=findings)
 
     if total > hard:
         lines = detail + [
             "over the hard cap. Split the work at a task boundary into",
             "sequential PRs, or ask a maintainer to add the `oversize` label.",
         ] + waiver_lines("oversize", trusted, claims)
+        findings = [
+            {"path": p, "message": "%d changed lines here (PR counts %d, hard cap %d)"
+                                   % (n, total, hard)}
+            for n, p in sorted(counted, reverse=True)[:10]
+        ]
         if "oversize" in trusted:
-            return report("diff-size", "WARN", lines, waivers=waivers)
-        return report("diff-size", "FAIL", lines, waivers=waivers)
+            return report("diff-size", "WARN", lines, waivers=waivers, findings=findings)
+        return report("diff-size", "FAIL", lines, waivers=waivers, findings=findings)
 
     if total > soft:
         return report("diff-size", "WARN", detail + ["over the soft limit - consider splitting."])

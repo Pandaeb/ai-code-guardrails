@@ -127,6 +127,48 @@ check required in branch protection. The package installs from outside
 the repository under review — pin `@main` to a tag once releases exist —
 so a PR cannot rewrite the checks that judge it.
 
+## Machine-readable output
+
+`--format json` prints a stable, versioned report (`schema_version: 1`):
+package version, one entry per guard (status, detail, structured waiver
+records — including ignored self-waiver attempts), summary counts, and
+the exit code.
+
+`--format sarif` prints SARIF 2.1.0 with one rule per guard and, where
+the guard knows the offending file, a location per finding. Uploaded to
+GitHub code scanning it turns a red check into an annotation on the
+exact file — the undeclared dependency's manifest, the deleted test,
+the file that blew the budget:
+
+```yaml
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Job-level exception to the contents:read default: the SARIF
+      # upload writes to the repository's code-scanning API.
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install git+https://github.com/Pandaeb/ai-code-guardrails@main
+      - run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD --format sarif > guardrails.sarif
+        env:
+          GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          GUARDRAILS_PR_BODY: ${{ github.event.pull_request.body }}
+      - uses: github/codeql-action/upload-sarif@v3
+        # The check step exits 1 when a guard fails - upload the
+        # annotations exactly then, and keep the job red.
+        if: always()
+        with:
+          sarif_file: guardrails.sarif
+```
+
 ## Configure
 
 Optional `.guardrails.json` at the repository root — read from the

@@ -54,14 +54,16 @@ def run(args, config):
     trusted, claims = collect_acks(args.base, args.head)
     lines += waiver_lines("guardrail-change", trusted, claims)
     waivers = waiver_state("guardrail-change", trusted, claims)
+    findings = [{"path": path, "message": "guardrail-protected path modified (%s)" % status}
+                for status, path in touched]
 
     if "guardrail-change" in trusted:
         return report("selfmod", "WARN", lines + [
             "reviewer: confirm the change does not remove a floor",
             "(hard cap present, test-integrity enabled, waivers human-only).",
-        ], waivers=waivers)
+        ], waivers=waivers, findings=findings)
     return report("selfmod", "FAIL", lines + [
         "move the guardrail change into its own PR, or ask a maintainer to",
         "add the `guardrail-change` label. Floor documents may be tightened,",
         "never weakened.",
-    ], waivers=waivers)
+    ], waivers=waivers, findings=findings)
