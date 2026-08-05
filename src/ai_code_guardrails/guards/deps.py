@@ -3,7 +3,18 @@
 Diffs the project's dependency manifests between base and head. Every
 ADDED dependency must be named in one of the configured declaration
 files — otherwise FAIL unless a human waiver (the `new-dependency` PR
-label) is present.
+label) is present. Git submodules count as dependencies: they pull in
+third-party code from a URL this diff never shows.
+
+Three routes bypass the manifest entirely and are checked separately,
+failing regardless of declaration policy:
+
+- a **lockfile** that authorises a direct dependency the manifest does
+  not name (`npm install --package-lock-only`). Only formats that
+  record which dependencies are direct are compared, so an ordinary
+  lockfile refresh stays quiet.
+- an **install-time script** (`preinstall`, `postinstall`, `prepare`, …)
+  added or changed: arbitrary code execution on every install.
 
 A repository that never configured the policy and has none of the
 default declaration files gets a WARN with setup instructions, not a
@@ -172,6 +183,75 @@ def parse_gemfile(text):
     return set(re.findall(r"""^\s*gem\s+['"]([^'"]+)['"]""", text, re.M))
 
 
+def parse_gitmodules(text):
+    """{submodule name: url} from a .gitmodules file.
+
+    A submodule is a dependency: it pulls third-party code into the
+    build from a URL nobody reviewed in this diff.
+    """
+    mods, current = {}, None
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = re.match(r'^\[submodule\s+"([^"]+)"\]', line)
+        if m:
+            current = m.group(1)
+            mods.setdefault(current, "")
+            continue
+        m = re.match(r"^url\s*=\s*(.+)$", line)
+        if m and current:
+            mods[current] = m.group(1).strip()
+    return mods
+
+
+def lockfile_direct_deps(path, text):
+    """Direct (top-level) dependency names a lockfile declares, or None.
+
+    Only formats that actually record which dependencies are *direct*
+    are parsed: npm's package-lock v2/v3 (`packages[""]`) and pnpm
+    (`importers`). yarn.lock, poetry.lock, Cargo.lock and friends
+    flatten the graph, so a name there may be transitive and comparing
+    it against the manifest would fire on every legitimate refresh.
+    None means "this format carries no direct-dependency claim".
+    """
+    basename = path.rsplit("/", 1)[-1]
+    if basename == "package-lock.json":
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return None
+        root = (data.get("packages") or {}).get("")
+        if root is None:  # lockfileVersion 1 has no direct/transitive split
+            return None
+        names = set()
+        for key in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+            names |= set((root.get(key) or {}).keys())
+        return names
+    if basename == "pnpm-lock.yaml":
+        names, in_root_deps = set(), False
+        for raw in text.splitlines():
+            if re.match(r"^\s{4}(dependencies|devDependencies):\s*$", raw):
+                in_root_deps = True
+                continue
+            if re.match(r"^\s{0,4}\S", raw) and not raw.startswith("      "):
+                in_root_deps = False
+            if in_root_deps:
+                m = re.match(r"^\s{6}'?([@\w][\w./@-]*)'?\s*:", raw)
+                if m:
+                    names.add(m.group(1))
+        return names or None
+    return None
+
+
+# lockfile -> the manifest that is supposed to authorise its contents.
+LOCKFILE_MANIFESTS = {
+    "package-lock.json": "package.json",
+    "pnpm-lock.yaml": "package.json",
+}
+
+# npm lifecycle scripts that run on `npm install` — adding one is adding
+# arbitrary code execution to every developer's and CI's install step.
+INSTALL_SCRIPT_KEYS = ("preinstall", "install", "postinstall", "prepare", "prepublish")
+
 PARSERS = {
     "package.json": ("npm", parse_package_json),
     "composer.json": ("packagist", parse_composer_json),
@@ -241,11 +321,71 @@ def registry_exists(ecosystem, name):
         return None
 
 
+def supply_chain_findings(args, changed):
+    """Dependency additions that never touch a manifest's dependency list.
+
+    Three routes, all of which used to walk past this guard:
+    a lockfile that authorises a direct dependency the manifest doesn't
+    name, a new git submodule, and an install-time lifecycle script.
+    Returns (lines, findings) — both empty when the PR is clean.
+    """
+    lines, findings = [], []
+    changed_paths = {path for status, path in changed if status != "D"}
+
+    for path in sorted(changed_paths):
+        basename = path.rsplit("/", 1)[-1]
+
+        manifest_name = LOCKFILE_MANIFESTS.get(basename)
+        if manifest_name:
+            head_direct = lockfile_direct_deps(path, show_file(args.head, path) or "")
+            base_direct = lockfile_direct_deps(path, show_file(args.base, path) or "") or set()
+            if head_direct is not None:
+                manifest_path = path.rsplit("/", 1)[0] + "/" + manifest_name if "/" in path else manifest_name
+                try:
+                    manifest_names = parse_package_json(show_file(args.head, manifest_path) or "{}")
+                except ValueError:
+                    manifest_names = set()
+                for name in sorted((head_direct - base_direct) - manifest_names):
+                    lines.append(
+                        "%s adds direct dependency `%s`, which %s does not declare"
+                        % (path, name, manifest_path)
+                    )
+                    findings.append({"path": path, "message": "lockfile adds direct dependency "
+                                                              "`%s` absent from %s" % (name, manifest_path)})
+
+        if basename == "package.json":
+            try:
+                head_scripts = (json.loads(show_file(args.head, path) or "{}").get("scripts") or {})
+                base_scripts = (json.loads(show_file(args.base, path) or "{}").get("scripts") or {})
+            except ValueError:
+                head_scripts, base_scripts = {}, {}
+            for key in INSTALL_SCRIPT_KEYS:
+                if key in head_scripts and head_scripts[key] != base_scripts.get(key):
+                    lines.append(
+                        "%s adds/changes the `%s` script - it runs on every install: %s"
+                        % (path, key, head_scripts[key])
+                    )
+                    findings.append({"path": path, "message": "install-time script `%s` added or "
+                                                              "changed: %s" % (key, head_scripts[key])})
+
+    return lines, findings
+
+
+def submodule_additions(args, changed):
+    """{name: url} for submodules this PR introduces (not SHA bumps)."""
+    if not any(path == ".gitmodules" and status != "D" for status, path in changed):
+        return {}
+    head = parse_gitmodules(show_file(args.head, ".gitmodules") or "")
+    base = parse_gitmodules(show_file(args.base, ".gitmodules") or "")
+    return {name: url for name, url in head.items() if name not in base}
+
+
 def run(args, config):
     cfg = config["deps"]
 
+    changed = changed_files(args.base, args.head)
     added = {}  # name -> (ecosystem, manifest path)
-    for status, path in changed_files(args.base, args.head):
+    for status, path in changed:
         found = manifest_parser(path)
         if not found or status == "D":
             continue
@@ -259,7 +399,12 @@ def run(args, config):
         for name in head_names - base_names:
             added[name] = (ecosystem, path)
 
-    if not added:
+    for name, url in submodule_additions(args, changed).items():
+        added[name] = ("submodule", ".gitmodules%s" % (" -> " + url if url else ""))
+
+    supply_lines, supply_findings = supply_chain_findings(args, changed)
+
+    if not added and not supply_lines:
         return report("deps", "PASS", ["no new dependencies"])
 
     root = repo_root()
@@ -301,10 +446,15 @@ def run(args, config):
             elif exists is None:
                 notes.append("%s - registry not checkable for %s" % (name, ecosystem))
 
-    if not undeclared and not registry_failures:
+    findings += supply_findings
+
+    if not undeclared and not registry_failures and not supply_lines:
         return report("deps", "PASS", ["%d new dependencies, all declared" % len(added)] + notes)
 
-    failures = list(registry_failures)  # hallucinated names fail in any mode
+    # Hallucinated names and manifest-bypassing additions fail in any
+    # mode: neither is a missing-paperwork problem that configuring a
+    # declaration file would fix.
+    failures = list(registry_failures) + list(supply_lines)
     if enforce:
         failures += undeclared
         if explicit and not found_files:

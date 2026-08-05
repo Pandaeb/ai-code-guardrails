@@ -1,6 +1,6 @@
 # ai-code-guardrails
 
-Deterministic guardrails for AI-written code. **Catches 25 of 25 known
+Deterministic guardrails for AI-written code. **Catches 28 of 28 known
 failure modes of AI-generated changes, at 0% false positives on the
 control corpus** — and ships the corpus so you can verify that claim
 yourself.
@@ -27,7 +27,7 @@ in any CI and locally. No runtime dependencies — stdlib Python only.
 | **diff budget** | PRs past reviewable size (default: warn at 400 changed lines, fail at 800), including evasion via fake "generated"/"vendored" file names — claimed exemptions are counted and capped |
 | **scope discipline** | files the declared scope never authorised — works from a SpecForge task spec or a plain `.guardrails/scope.yml` allow-list; either declaration is read from the base ref, so a PR can't widen its own permission slip |
 | **test integrity** | deleted test files, added skip/focus markers, net assertion loss |
-| **dependency policy** | dependencies absent from the project's declaration file (with machine-recognisable matching — a package named `is` can't hide in prose), optional registry-existence check against slopsquatting |
+| **dependency policy** | dependencies absent from the project's declaration file (with machine-recognisable matching — a package named `is` can't hide in prose), plus the routes that skip the manifest entirely: a lockfile authorising an undeclared direct dependency, a new git submodule, an added install-time script; optional registry-existence check against slopsquatting |
 | **self-modification** | any PR touching the guards' own code or config without a human-applied label |
 
 **Waivers are structurally human-only.** A guard is overridden by adding
@@ -38,8 +38,8 @@ self-waivers.
 
 ## Verify the claim
 
-The red-team corpus is executable: 25 attacks that must be caught and
-13 legitimate controls that must stay quiet, each a throwaway git
+The red-team corpus is executable: 28 attacks that must be caught and
+16 legitimate controls that must stay quiet, each a throwaway git
 repository whose diff *is* the attack. It runs as this package's test
 suite:
 
