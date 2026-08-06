@@ -9,6 +9,11 @@ A guard bypass is a vulnerability, not a changelog entry — see
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-06
+
+The corpus grows 25/13 → **36 attacks / 23 controls**, closing the
+"corpus to ~60 cases" roadmap goal at 59.
+
 ### Added
 
 - Dependency guard covers the routes that bypass a manifest's dependency
@@ -25,8 +30,7 @@ A guard bypass is a vulnerability, not a changelog entry — see
   `@ts-ignore`, `eslint-disable`, `# noqa`, …) warn below
   `added_fail_threshold` and fail at or above it; switching a rule off
   in a linter's configuration fails on the first occurrence. Waivable
-  by the new `suppression` label. Corpus grows to 32 attacks /
-  19 controls.
+  by the new `suppression` label.
 
 ### Changed
 
@@ -70,5 +74,6 @@ verification layer and generalized to run on any git repository.
   detection claim is verifiable by anyone.
 - Zero runtime dependencies (stdlib only), Python 3.9+.
 
-[Unreleased]: https://github.com/Pandaeb/ai-code-guardrails/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Pandaeb/ai-code-guardrails/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Pandaeb/ai-code-guardrails/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Pandaeb/ai-code-guardrails/releases/tag/v0.1.0

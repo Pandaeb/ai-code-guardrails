@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # the guards diff against the base branch
-      - uses: Pandaeb/ai-code-guardrails@v0.1.0
+      - uses: Pandaeb/ai-code-guardrails@v0.2.0
 ```
 
 Inputs, all optional: `base` (default: the PR's target branch), `head`,
@@ -128,7 +128,7 @@ Without the action, the same job by hand:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - run: pip install ai-code-guardrails==0.1.0
+      - run: pip install ai-code-guardrails==0.2.0
       - run: ai-code-guardrails check --base "origin/${GITHUB_BASE_REF}" --head HEAD
         env:
           GUARDRAILS_ACKS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
@@ -167,7 +167,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: Pandaeb/ai-code-guardrails@v0.1.0
+      - uses: Pandaeb/ai-code-guardrails@v0.2.0
         with:
           format: sarif # also written to guardrails.sarif
       - uses: github/codeql-action/upload-sarif@v3
