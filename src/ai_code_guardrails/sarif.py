@@ -28,6 +28,9 @@ RULES = {
              "declaration, read from the base ref.",
     "test-integrity": "No deleted test files, added skip/focus markers, "
                       "or net assertion loss.",
+    "suppression": "No silencing the type checker or linter instead of "
+                   "fixing the code; disabling a rule repository-wide "
+                   "fails on the first occurrence.",
     "deps": "Every added dependency must be named in a declaration "
             "file; optionally checked against its registry.",
 }

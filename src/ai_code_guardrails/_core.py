@@ -131,6 +131,59 @@ DEFAULT_CONFIG = {
         # Net assertion loss at or above this count fails (below it warns).
         "assert_loss_fail_threshold": 3,
     },
+    "suppression": {
+        # Silencing the analyser instead of fixing the code. Inline
+        # markers are counted per PR: below the threshold they warn
+        # (one justified ignore is normal engineering), at or above it
+        # they fail. Turning a rule off in a linter's CONFIG is a
+        # different act — it silences the whole repository, so it fails
+        # on the first occurrence.
+        "added_fail_threshold": 3,
+        "markers": [
+            r"#\s*type:\s*ignore",
+            r"#\s*mypy:\s*ignore-errors",
+            r"#\s*noqa\b",
+            r"#\s*pylint:\s*disable",
+            r"@ts-ignore",
+            r"@ts-nocheck",
+            r"eslint-disable",
+            r"@SuppressWarnings",
+            r"//\s*nolint",
+            r"#\s*pragma\s+warning\s+disable",
+            r"#\[allow\(",
+        ],
+        "config_globs": [
+            "**/.eslintrc*",
+            "**/eslint.config.*",
+            "**/tsconfig*.json",
+            "**/.flake8",
+            "**/setup.cfg",
+            "**/pyproject.toml",
+            "**/.golangci.y*ml",
+            "**/.rubocop.yml",
+        ],
+        # Added lines in those files that switch analysis OFF.
+        "config_disable_patterns": [
+            r'"[\w./@-]+"\s*:\s*(?:"off"|0\b)',
+            r"^\s*[\w./@-]+:\s*(?:off|false)\s*$",
+            r'"(?:strict|noImplicitAny|strictNullChecks|noUnusedLocals)"\s*:\s*false',
+            r"^\s*strict\s*=\s*false",
+            r"^\s*(?:extend-)?ignore\s*=",
+            r"^\s*ignore_errors\s*=\s*[Tt]rue",
+            r"^\s*disable\s*[:=]",
+        ],
+        # Paths whose contents are not code an analyser ever reads.
+        # Prose ABOUT suppressions ("never add `# type: ignore`") is not
+        # a suppression, and a guard that fires on a style guide gets
+        # uninstalled. Extend this for data files that carry markers as
+        # payloads — e.g. a red-team corpus.
+        "exclude": [
+            "**/*.md",
+            "**/*.rst",
+            "**/*.txt",
+            "**/*.adoc",
+        ],
+    },
     "deps": {
         # Where new dependencies must be declared (searched at HEAD).
         # {feature} is substituted when a feature name is known. The
@@ -168,6 +221,7 @@ WAIVER_TOKENS = {
     "test-weakening",
     "new-dependency",
     "guardrail-change",
+    "suppression",
 }
 
 # Files that define the rules. A PR may not quietly rewrite them; see

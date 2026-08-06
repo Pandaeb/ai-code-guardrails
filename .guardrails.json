@@ -19,6 +19,18 @@
       "tests/test_*.py"
     ]
   },
+  "suppression": {
+    "_comment": "Adds this package's own self-reference to the documentation defaults. tests/redteam/cases.py carries suppression markers as ATTACK PAYLOADS in string literals, and the two guard sources below DEFINE the marker patterns - none of it is code an analyser reads. A tool that detects suppressions necessarily contains suppressions; the corpus and the guard sources are gated by selfmod.protected_paths instead.",
+    "exclude": [
+      "**/*.md",
+      "**/*.rst",
+      "**/*.txt",
+      "**/*.adoc",
+      "tests/redteam/**",
+      "src/ai_code_guardrails/_core.py",
+      "src/ai_code_guardrails/guards/suppression.py"
+    ]
+  },
   "deps": {
     "_comment": "Zero runtime dependencies is a floor of this package. The declaration file deliberately does not exist: an explicitly configured policy with no usable declaration file FAILS every new dependency, so adding one forces creating docs/dependencies.md (and the argument for it) in the same PR.",
     "declaration_files": [

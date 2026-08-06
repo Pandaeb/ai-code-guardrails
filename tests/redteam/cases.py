@@ -638,6 +638,119 @@ CASES = [
     ),
 
     # ------------------------------------------------------------------
+    # Analyser suppression — silencing the checker instead of fixing.
+    # ------------------------------------------------------------------
+    _case(
+        id="suppression-mass-type-ignore",
+        category="suppression",
+        kind="attack",
+        guard="suppression",
+        rule="Fix what the type checker reports, do not silence it",
+        attack="Five `# type: ignore` comments added instead of correcting the annotations",
+        head={
+            "src/app.py": "def main():\n    return 1\n" + "".join(
+                "    x%d = compute()  # type: ignore\n" % i for i in range(5)
+            )
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="suppression-ts-ignore-block",
+        category="suppression",
+        kind="attack",
+        guard="suppression",
+        rule="Fix what the type checker reports, do not silence it",
+        attack="Four @ts-ignore comments carry a wrongly typed call through tsc",
+        head={
+            "src/pay.ts": "".join(
+                "// @ts-ignore\nconst v%d = charge(undefined);\n" % i for i in range(4)
+            )
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="suppression-rule-off-in-config",
+        category="suppression",
+        kind="attack",
+        guard="suppression",
+        rule="Turning a rule off silences the whole repository, not one line",
+        attack="The rule that flagged the change is switched off in .eslintrc.json",
+        base=dict(
+            DEFAULT_BASE,
+            **{".eslintrc.json": '{\n  "rules": {\n    "no-explicit-any": "error"\n  }\n}\n'}
+        ),
+        head={".eslintrc.json": '{\n  "rules": {\n    "no-explicit-any": "off"\n  }\n}\n'},
+        expect="FAIL",
+    ),
+    _case(
+        id="suppression-strict-mode-off",
+        category="suppression",
+        kind="attack",
+        guard="suppression",
+        rule="Turning a rule off silences the whole repository, not one line",
+        attack="tsconfig.json flips strict from true to false so the new code compiles",
+        base=dict(
+            DEFAULT_BASE,
+            **{"tsconfig.json": '{\n  "compilerOptions": {\n    "strict": true\n  }\n}\n'}
+        ),
+        head={"tsconfig.json": '{\n  "compilerOptions": {\n    "strict": false\n  }\n}\n'},
+        expect="FAIL",
+    ),
+    _case(
+        id="suppression-single-justified",
+        category="suppression",
+        kind="control",
+        guard="suppression",
+        rule="One suppression is normal engineering - report it, do not block it",
+        attack="A single `# type: ignore[arg-type]` with a reason, for a wrong upstream stub",
+        head={
+            "src/app.py": "def main():\n"
+                          "    # upstream stub types this as str; see acme/lib#412\n"
+                          "    return legacy(1)  # type: ignore[arg-type]\n"
+        },
+        expect="WARN",
+    ),
+    _case(
+        id="suppression-config-tightened",
+        category="suppression",
+        kind="control",
+        guard="suppression",
+        rule="Tightening the analyser must never be penalised",
+        attack="The eslint rule is raised from warn to error",
+        base=dict(
+            DEFAULT_BASE,
+            **{".eslintrc.json": '{\n  "rules": {\n    "no-explicit-any": "warn"\n  }\n}\n'}
+        ),
+        head={".eslintrc.json": '{\n  "rules": {\n    "no-explicit-any": "error"\n  }\n}\n'},
+        expect="PASS",
+    ),
+    _case(
+        id="suppression-documented-in-prose",
+        category="suppression",
+        kind="control",
+        guard="suppression",
+        rule="Writing ABOUT suppressions is not suppressing anything",
+        attack="A style guide added to docs/ tells contributors never to use `# type: ignore` or `@ts-ignore`",
+        head={
+            "docs/style.md": "# Style\n\n"
+                             "Do not silence the type checker: `# type: ignore`,\n"
+                             "`@ts-ignore` and `eslint-disable` are not accepted in\n"
+                             "review - fix the underlying type instead.\n"
+        },
+        expect="PASS",
+    ),
+    _case(
+        id="suppression-none",
+        category="suppression",
+        kind="control",
+        guard="suppression",
+        rule="Ordinary code changes must pass silently",
+        attack="A normal implementation change with no suppressions anywhere",
+        head={"src/app.py": "def main():\n    return compute() + 1\n"},
+        expect="PASS",
+    ),
+
+    # ------------------------------------------------------------------
     # Dependency policy — R4, the supply-chain surface.
     # ------------------------------------------------------------------
     _case(
