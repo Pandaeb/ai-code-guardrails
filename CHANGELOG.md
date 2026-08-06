@@ -15,6 +15,11 @@ A guard bypass is a vulnerability, not a changelog entry — see
   list: a lockfile authorising a direct dependency the manifest does not
   name, a new git submodule, and an added or changed install-time script
   (`preinstall`/`install`/`postinstall`/`prepare`/`prepublish`).
+- Test-integrity guard reaches into test *semantics*: a snapshot
+  re-recorded in a PR that changes nothing else, tautological
+  assertions (`assert True`, `expect(1).toBe(1)`, asserting the very
+  value a mock was told to return), and a test that mocks the unit it
+  is named after. All waivable by the existing `test-weakening` label.
 - New **suppression** guard: silencing the type checker or linter
   instead of fixing the code. Inline markers (`# type: ignore`,
   `@ts-ignore`, `eslint-disable`, `# noqa`, …) warn below
