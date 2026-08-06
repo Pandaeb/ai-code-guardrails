@@ -9,6 +9,14 @@ A guard bypass is a vulnerability, not a changelog entry — see
 
 ## [Unreleased]
 
+### Added
+
+- Dependency guard covers the routes that bypass a manifest's dependency
+  list: a lockfile authorising a direct dependency the manifest does not
+  name, a new git submodule, and an added or changed install-time script
+  (`preinstall`/`install`/`postinstall`/`prepare`/`prepublish`). Corpus
+  grows to 28 attacks / 16 controls.
+
 ## [0.1.0] — 2026-08-05
 
 First public release, extracted from the SpecForge framework's
