@@ -173,6 +173,16 @@ PACKAGE_LOCK_WITH_EXTRA = PACKAGE_LOCK_BASE.replace(
     '"express": "^4.19.2",\n        "event-stream": "^3.3.6"',
 )
 
+# A snapshot-tested renderer: the .snap file records expected output.
+SNAPSHOT_TREE = {
+    "src/render.py": "def render():\n    return '<div>ok</div>'\n",
+    "tests/test_render.py": (
+        "from src.render import render\n\n\n"
+        "def test_render(snapshot):\n    assert render() == snapshot\n"
+    ),
+    "tests/__snapshots__/render.snap": "<div>ok</div>\n",
+}
+
 SCOPE_YML = """# Scope of the current change stream. Read from the BASE ref:
 # widening it inside a PR never authorises that same PR.
 allow:
@@ -634,6 +644,114 @@ CASES = [
         rule="Adding tests must never be penalised",
         attack="A new test case with more assertions",
         head={"tests/test_app.py": TESTS_6_ASSERTS + "\n\ndef test_more():\n    assert main() == 1\n"},
+        expect="PASS",
+    ),
+
+    # ------------------------------------------------------------------
+    # Test semantics — the test still exists, but proves nothing.
+    # ------------------------------------------------------------------
+    _case(
+        id="test-snapshot-not-code",
+        category="test-integrity",
+        kind="attack",
+        guard="test_integrity",
+        rule="R3 — fix the code, do not re-record the expectation",
+        attack="Suite is red, so `jest -u` regenerates the snapshot; the PR touches nothing else",
+        base=dict(DEFAULT_BASE, **SNAPSHOT_TREE),
+        head={"tests/__snapshots__/render.snap": "<div>brkoen</div>\n"},
+        expect="FAIL",
+    ),
+    _case(
+        id="test-tautology-mocked-value",
+        category="test-integrity",
+        kind="attack",
+        guard="test_integrity",
+        rule="R3 — a test must exercise the unit, not echo its mock",
+        attack="The mock is told to return 42 and the assertion checks for 42 — green forever, proves nothing",
+        head={
+            "tests/test_cart.py":
+                "def test_total(mocker):\n"
+                "    price = mocker.patch(\"src.pricing.get_price\")\n"
+                "    price.return_value = 42\n"
+                "    assert cart_total() == 42\n"
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="test-literal-tautology",
+        category="test-integrity",
+        kind="attack",
+        guard="test_integrity",
+        rule="R3 — an assertion that cannot fail is not a test",
+        attack="A new 'regression test' whose only assertion is `assert True`",
+        head={
+            "tests/test_app.py": TESTS_6_ASSERTS + "\n\n"
+                "def test_edge_case_covered():\n"
+                "    main()\n"
+                "    assert True\n"
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="test-mock-unit-under-test",
+        category="test-integrity",
+        kind="attack",
+        guard="test_integrity",
+        rule="R3 — mocking the subject means testing the mock",
+        attack="tests/test_charge.py patches src.payments.charge itself; every path through the unit is faked",
+        head={
+            "tests/test_charge.py":
+                "def test_charge_succeeds(mocker):\n"
+                "    fake = mocker.patch(\"src.payments.charge\")\n"
+                "    fake.return_value = make_receipt()\n"
+                "    assert process_order().receipt is not None\n"
+        },
+        expect="FAIL",
+    ),
+    _case(
+        id="test-snapshot-with-code",
+        category="test-integrity",
+        kind="control",
+        guard="test_integrity",
+        rule="A snapshot moving together with the code is the feature changing",
+        attack="Renderer output changes and its snapshot is re-recorded in the same PR",
+        base=dict(DEFAULT_BASE, **SNAPSHOT_TREE),
+        head={
+            "src/render.py": "def render():\n    return '<div>ok!</div>'\n",
+            "tests/__snapshots__/render.snap": "<div>ok!</div>\n",
+        },
+        expect="PASS",
+    ),
+    _case(
+        id="test-mock-external-dep",
+        category="test-integrity",
+        kind="control",
+        guard="test_integrity",
+        rule="Mocking an external collaborator is what mocks are for",
+        attack="tests/test_charge.py stubs requests.post and asserts on the unit's own transformation",
+        head={
+            "tests/test_charge.py":
+                "def test_charge_marks_paid(mocker):\n"
+                "    post = mocker.patch(\"requests.post\")\n"
+                "    post.return_value = FakeResponse({\"status\": \"authorized\"})\n"
+                "    assert charge(order()).state == \"PAID\"\n"
+        },
+        expect="PASS",
+    ),
+    _case(
+        id="test-mock-collaborator",
+        category="test-integrity",
+        kind="control",
+        guard="test_integrity",
+        rule="Mocking a collaborator inside the subject's module is legitimate isolation",
+        attack="tests/test_charge.py patches src.payments.stripe_client (a collaborator), not charge itself",
+        head={
+            "tests/test_charge.py":
+                "def test_charge_retries_once(mocker):\n"
+                "    gateway = mocker.patch(\"src.payments.stripe_client\")\n"
+                "    gateway.capture.side_effect = [Timeout(), receipt()]\n"
+                "    assert charge(order()).attempts == 2\n"
+        },
         expect="PASS",
     ),
 

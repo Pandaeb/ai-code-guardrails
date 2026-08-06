@@ -130,6 +130,12 @@ DEFAULT_CONFIG = {
         ],
         # Net assertion loss at or above this count fails (below it warns).
         "assert_loss_fail_threshold": 3,
+        # Snapshot artifacts: a MODIFIED snapshot in a PR that changes
+        # nothing else is the test being bent to the broken output.
+        "snapshot_globs": [
+            "**/__snapshots__/**",
+            "**/*.snap",
+        ],
     },
     "suppression": {
         # Silencing the analyser instead of fixing the code. Inline

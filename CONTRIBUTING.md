@@ -33,7 +33,7 @@ pytest
 ```
 
 - **Detection may never regress:** all corpus attacks stay caught, all
-  controls stay quiet (currently 32/32 attacks, 0% false positives).
+  controls stay quiet (currently 36/36 attacks, 0% false positives).
 - **A new guard ships with its controls in the same PR** — at least one
   legitimate change the guard must stay quiet on. A guard that scores
   100% by failing everything is worthless.
